@@ -59,10 +59,13 @@ if [[ "$dry_run" == true ]]; then
     exit 0
 fi
 
-redirect_headers="$(
+if ! redirect_headers="$(
     curl --silent --show-error --head --dump-header - --output /dev/null \
         "$HTTP_URL"
-)"
+)"; then
+    echo "Ошибка: ресурс ${HTTP_URL} недоступен" >&2
+    exit 1
+fi
 redirect_status="$(printf '%s\n' "$redirect_headers" | awk 'NR == 1 { print $2 }')"
 redirect_location="$(
     printf '%s\n' "$redirect_headers" |
@@ -84,22 +87,31 @@ if [[ "$tls_check_status" -eq 0 ]]; then
     exit 1
 fi
 
-insecure_status="$(
+if ! insecure_status="$(
     curl --fail --silent --show-error --insecure --head \
         --write-out '%{http_code}' --output /dev/null "$SITE_URL"
-)"
+)"; then
+    echo "Ошибка: HTTPS-ресурс ${SITE_URL} недоступен даже с отключенной проверкой сертификата" >&2
+    exit 1
+fi
 if [[ "$insecure_status" != "200" ]]; then
     echo "Ошибка: HTTPS с отключенной проверкой сертификата вернул ${insecure_status}" >&2
     exit 1
 fi
 
-curl --fail --silent --show-error --cacert "$CA_CERT" "$SITE_URL" >/dev/null
+if ! curl --fail --silent --show-error --cacert "$CA_CERT" "$SITE_URL" >/dev/null; then
+    echo "Ошибка: HTTPS-ресурс ${SITE_URL} недоступен при проверке сертификата" >&2
+    exit 1
+fi
 
-not_found_status="$(
+if ! not_found_status="$(
     curl --silent --show-error --head \
         --write-out '%{http_code}' --output /dev/null \
         --cacert "$CA_CERT" "$SITE_URL/no-such-page"
-)"
+)"; then
+    echo "Ошибка: проверка страницы ${SITE_URL}/no-such-page не выполнена" >&2
+    exit 1
+fi
 if [[ "$not_found_status" != "404" ]]; then
     echo "Ошибка: для несуществующей страницы ожидался HTTP 404, получен ${not_found_status}" >&2
     exit 1
