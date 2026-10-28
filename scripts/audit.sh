@@ -89,5 +89,39 @@ fi
 check "Права веб-ресурса и закрытого ключа безопасны" \
     "ok" "$web_permissions_status"
 
+echo "[5] Контейнеризация"
+check "Служба docker активна" \
+    "active" "$(systemctl is-active docker 2>/dev/null)"
+
+check "Контейнер СУБД находится в состоянии healthy" \
+    "healthy" "$(docker inspect -f '{{.State.Health.Status}}' app-db-1 2>/dev/null)"
+
+published_ports_status="ok"
+unexpected_port_binding="$(
+    ss -tln 2>/dev/null |
+        awk '
+            $1 == "LISTEN" {
+                local_address = $4
+                port = local_address
+                sub(/^.*:/, "", port)
+                if ((port == "5000" || port == "5432") &&
+                    local_address !~ /^127\.0\.0\.1:/) {
+                    print local_address
+                    found = 1
+                }
+            }
+            END { exit found }
+        '
+)" || published_ports_status="fail"
+if [[ -n "$unexpected_port_binding" ]]; then
+    published_ports_status="fail"
+fi
+check "Порты 5000 и 5432 прослушиваются только на 127.0.0.1" \
+    "ok" "$published_ports_status"
+
+env_file="${AUDIT_ENV_FILE:-/home/devops/app/.env}"
+check "Файл .env имеет права 600" \
+    "600" "$(stat -c '%a' "$env_file" 2>/dev/null)"
+
 echo "Пройдено: $PASS, не пройдено: $FAIL"
 [[ $FAIL -eq 0 ]] && exit 0 || exit 1
