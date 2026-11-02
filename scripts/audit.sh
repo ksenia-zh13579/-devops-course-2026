@@ -123,5 +123,47 @@ env_file="${AUDIT_ENV_FILE:-/home/devops/app/.env}"
 check "Файл .env имеет права 600" \
     "600" "$(stat -c '%a' "$env_file" 2>/dev/null)"
 
+echo "[6] Контрольная работа № 2"
+kr2_dir="${KR2_DIR:-/home/devops/kr2}"
+kr2_port="8004"
+
+redis_container="$(
+    docker compose --project-directory "$kr2_dir" ps -q redis 2>/dev/null
+)"
+redis_health=""
+if [[ -n "$redis_container" ]]; then
+    redis_health="$(
+        docker inspect -f '{{.State.Health.Status}}' "$redis_container" 2>/dev/null
+    )"
+fi
+check "Контейнер redis находится в состоянии healthy" \
+    "healthy" "$redis_health"
+
+kr2_port_binding="$(
+    docker compose --project-directory "$kr2_dir" port app "$kr2_port" 2>/dev/null |
+        tr -d '\r'
+)"
+check "Порт ${kr2_port} опубликован только на 127.0.0.1" \
+    "127.0.0.1:${kr2_port}" "$kr2_port_binding"
+
+check "Файл ~/kr2/.env имеет права 600" \
+    "600" "$(stat -c '%a' "$kr2_dir/.env" 2>/dev/null)"
+
+kr2_certificate_status=0
+openssl x509 \
+    -checkend 2592000 \
+    -noout \
+    -in /etc/ssl/certs/kr2.crt >/dev/null 2>&1 ||
+    kr2_certificate_status=$?
+check "Сертификат kr2 действителен не менее 30 дней" \
+    "0" "$kr2_certificate_status"
+
+kr2_site_link="no"
+if [[ -L /etc/nginx/sites-enabled/kr2 ]]; then
+    kr2_site_link="yes"
+fi
+check "Ресурс kr2 активирован в sites-enabled" \
+    "yes" "$kr2_site_link"
+
 echo "Пройдено: $PASS, не пройдено: $FAIL"
 [[ $FAIL -eq 0 ]] && exit 0 || exit 1
