@@ -1,0 +1,6 @@
+---
+app_image: "ghcr.io/ksenia-zh13579/devops-ci-app"
+app_tag: "ad68328ddd5e4f14b602986ed0001518f6a21fc7"
+app_container_name: "devops-ci-app"
+app_host_port: 5000
+app_internal_port: 5000
